@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import pixabayApi from '../services/pixabay_api';
+import pixabayApi from '../../services/pixabay_api';
 import { Watch } from 'react-loader-spinner';
 import { AppContainer } from './App.styled';
 
