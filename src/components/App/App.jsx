@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import { useState, useEffect } from 'react';
 import pixabayApi from '../services/pixabay_api';
 import { Watch } from 'react-loader-spinner';
 import { AppContainer } from './App.styled';
@@ -8,119 +8,108 @@ import ImageGallery from '../ImageGallery/ImageGallery';
 import Button from '../Button/Button';
 import Modal from 'components/Modal/Modal';
 import Loader from 'components/Loader/Loader';
+import toast, { Toaster } from 'react-hot-toast';
 
-export class App extends Component {
-  state = {
-    query: '',
-    isQueryCorrect: true,
-    pageNumber: 1,
-    totalPages: 0,
-    data: [],
-    btnState: false,
-    error: '',
-    isLoading: false,
-    modalImage: '',
-    isModalOpen: false,
-  };
+export const App = () => {
+  const [query, setQuery] = useState('');
+  const [isQueryCorrect, setIsQueryCorrect] = useState(true);
+  const [pageNumber, setPageNumber] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [data, setData] = useState([]);
+  const [btnState, setBtnState] = useState(false);
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [modalImage, setModalImage] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  onSubmit = async query => {
-    if (query === this.state.query) return;
+  useEffect(() => {
+    if (!query) return;
 
-    await this.setState({ query, pageNumber: 1, data: [] });
-    this.getApiData();
-  };
+    setBtnState(false);
+    setIsLoading(true);
+    setTotalPages(0);
+    setError('');
 
-  handleData = data => {
-    const { total, hits } = data;
-    const { pageNumber } = this.state;
+    function handleData(parsedData) {
+      const { total, hits } = parsedData;
 
-    if (total === 0) {
-      this.setState({ totalPages: total, isQueryCorrect: false });
-    } else {
-      this.setState({ totalPages: total, isQueryCorrect: true });
+      if (total === 0) {
+        setIsQueryCorrect(false);
+        return;
+      }
+
+      if (pageNumber === 1) {
+        setData(hits);
+      } else {
+        setData(prevState => [...prevState, ...hits]);
+      }
+
+      setTotalPages(total);
+      setIsQueryCorrect(true);
     }
 
-    if (pageNumber === 1) {
-      this.setState({ data: hits });
-    } else {
-      this.setState(prevState => ({
-        data: [...prevState.data, ...hits],
-      }));
-    }
+    pixabayApi({ query, pageNumber })
+      .then(res => res.json())
+      .then(res => {
+        handleData(res);
+      })
+      .catch(() => {
+        toast.error('Something went wrong');
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [query, pageNumber]);
 
-    setTimeout(() => this.handleBtnState(), 25);
-  };
+  useEffect(() => {
+    if (!pageNumber) return;
 
-  handleBtnClick = async () => {
-    await this.setState(prevState => ({
-      pageNumber: prevState.pageNumber + 1,
-    }));
-    this.getApiData();
-  };
-
-  handleBtnState = () => {
-    const { pageNumber, totalPages } = this.state;
     const pagesToShow = Math.ceil((totalPages - pageNumber * 12) / 12);
-    pagesToShow >= 1
-      ? this.setState({ btnState: true })
-      : this.setState({ btnState: false });
+    pagesToShow >= 1 ? setBtnState(true) : setBtnState(false);
+  }, [totalPages, pageNumber]);
+
+  function onSubmit(newQuery) {
+    if (query === newQuery) return;
+
+    setQuery(newQuery);
+    setPageNumber(1);
+    setData([]);
+    setIsQueryCorrect(true);
+  }
+
+  function handleBtnClick() {
+    setPageNumber(prevState => prevState + 1);
+  }
+
+  const handleModalState = (image = '') => {
+    setModalImage(image);
+    setIsModalOpen(prevState => !prevState);
   };
 
-  handleModalState = (image = '') => {
-    this.setState({ imageModal: image });
-    this.setState(prevState => ({ isModalOpen: !prevState.isModalOpen }));
-  };
-
-  getApiData = async () => {
-    const { query, pageNumber } = this.state;
-    this.setState({ btnState: false, isLoading: true });
-
-    try {
-      const response = await pixabayApi({ query, pageNumber });
-      response
-        .json()
-        .then(res => this.handleData(res))
-        .finally(this.setState({ isLoading: false }));
-    } catch (error) {
-      console.log(error.message);
-      this.setState({ error: 'Something went wrong', isLoading: false });
-    }
-  };
-
-  render() {
-    const {
-      query,
-      isQueryCorrect,
-      data,
-      btnState,
-      error,
-      isLoading,
-      imageModal,
-      isModalOpen,
-    } = this.state;
-
-    return (
+  return (
+    <>
       <AppContainer>
-        <Searchbar onSubmit={this.onSubmit} />
-        {error && <p>{this.state.error}</p>}
+        <Searchbar onSubmit={onSubmit} />
+        {error && <p>{error}</p>}
         {query && (
           <ImageGallery
             data={data}
             isQueryCorrect={isQueryCorrect}
-            onModalState={this.handleModalState}
+            onModalState={handleModalState}
             isModalOpen={isModalOpen}
           />
         )}
-        {btnState && <Button onBtnClick={this.handleBtnClick} />}
+        {btnState && <Button onBtnClick={handleBtnClick} />}
         {isLoading && (
           <Loader>
             <Watch color="#4d5eb3" />
           </Loader>
         )}
         {isModalOpen && (
-          <Modal image={imageModal} onModalClose={this.handleModalState} />
+          <Modal image={modalImage} onModalClose={handleModalState} />
         )}
       </AppContainer>
-    );
-  }
-}
+      <Toaster position="top-left" />
+    </>
+  );
+};
